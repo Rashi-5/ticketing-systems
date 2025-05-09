@@ -1,0 +1,173 @@
+syntax = "proto3";
+package org.example.grpc.event;
+
+enum SeatType {
+  REGULAR = 0;
+  VIP = 1;
+  BALCONY = 2;
+  PREMIUM = 3;
+}
+
+enum TicketStatus {
+  AVAILABLE = 0;
+  RESERVED = 1;
+  ISSUED = 2;
+  CANCELLED = 3;
+}
+
+enum ReservationStatus {
+  PENDING = 0;
+  CONFIRMED = 1;
+  FAILED = 2;
+}
+
+message Ticket {
+  string id = 1;
+  double price = 2;
+  string event_id = 3;
+  string date = 4;
+  SeatType seat = 5;
+  int64 issued_at  = 6;
+  string promo_code = 7;
+  TicketStatus status = 8;
+  string applied_promo_code = 9;
+}
+
+message AfterPartyTicket {
+  string id = 1;
+  string ticket_id = 2; // reference to Ticket
+  bool is_valid = 3;
+}
+
+message Organizer {
+  string organizer_id = 1; // user_id from User
+  string name = 2;
+  string organization_name = 3;
+  repeated string managed_event_ids = 4;
+  int64 registered_at = 5;
+}
+
+message ClerkAssignment {
+  string assignment_id = 1;
+  string event_id = 2;
+  string clerk_id = 3; // user_id of a User with role
+  int64 assigned_ticket_count = 4;
+  string assigned_by = 5; // user_id of organizer who assigned them
+  int64 assigned_at = 6;
+}
+
+message Event {
+  string id = 1;
+  string name = 2;
+  string date = 3;
+  string venue = 4;
+  bool is_cancelled = 5;
+  int32 min_ticket_count = 6;
+  int32  min_after_party_ticket_count = 7;
+  int32 number_of_clerks = 8;
+  map<string,Ticket> tickets = 9;
+  map<string, ClerkAssignment> clerks = 10; // clerk user_ids
+  string organizer_id = 11;
+}
+
+message ReservationRequest {
+  string reservation_id = 1;
+  string user_id = 2;
+  string event_id = 3;
+  SeatType seat_type = 4;
+  bool combo_ticket = 5; // concert + after-party
+  int32 quantity = 6; // number of tickets (only for concert, not combo)
+  int64 requested_at = 7;
+}
+
+message ReservationRecord {
+  ReservationRequest reservation = 1;
+  ReservationStatus status = 2;
+}
+
+message BulkComboReservation {
+  string reservation_id = 1;
+  string coordinator_id = 2;
+  string event_id = 3;
+  int32 quantity = 4;
+  SeatType seat_type = 5;
+  int64 requested_at = 6;
+}
+
+message ReservationResponse {
+  bool success = 1;
+  string message = 2;
+  ReservationRequest reservation = 3;
+}
+
+message BulkReservationResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Ticket tickets = 3;
+  repeated AfterPartyTicket after_party_tickets = 4;
+}
+
+message CartLine {
+  string event_id = 1;
+  SeatType seat_type = 2;
+  int32 quantity = 3;
+  bool combo = 4;
+}
+
+message CartReservationRequest { string user_id = 1; repeated CartLine lines = 2; }
+message CartReservationResponse { bool success = 1; string msg = 2; repeated ReservationRecord reservations = 3; }
+
+message EventCreateRq  { string rq_id = 1; Event event = 2; string user_id = 3; }
+message EventCreateAck { string event_id = 1; bool ok = 2; string msg = 3; }
+
+message EventUpdateRq  { string rq_id = 1; Event event = 2; string user_id = 3; }
+message EventUpdateAck { string event_id = 1; bool ok = 2; string msg = 3; }
+
+message EventRemoveRq  { string rq_id = 1; string event_id = 2; string user_id = 3; }
+message EventRemoveAck { string event_id = 1; bool ok = 2; string msg = 3; }
+
+message MyEventsRq     { string organizer_id = 1; }
+message MyEventsReply  { bool ok = 1; repeated Event events = 2; string msg = 3; }
+
+message TicketIssueRq { string rq_id = 1; string clerk_id = 2; Ticket ticket = 3; }
+message TicketIssueAck { string ticket_id = 1; bool ok = 2; string msg = 3; }
+
+message TicketCancelRq { string ticket_id = 1; string clerk_id = 2; }
+message TicketCancelAck { bool ok = 1; string msg = 2; }
+
+message TicketQueryRq { string event_id = 1; }
+message TicketQueryAck { bool ok = 1; repeated Ticket tickets = 2; string msg = 3; }
+
+message TicketStockRq {
+  string rq_id = 1;
+  string event_id = 2;
+  int32 ticket_delta = 3;
+  int32 after_party_delta = 4;
+  double new_price = 5;  // < 0 means unchanged
+  string clerk_id = 6;
+}
+message TicketStockAck { string event_id = 1; bool ok = 2; string msg = 3; }
+
+message ReservationLogRq { string user_id = 1; }
+message ReservationLogAck { bool ok = 1; repeated ReservationRecord reservations = 2; string msg = 3; }
+
+message ReservationStatusUpdateRq {
+  string reservation_id = 1;
+  ReservationStatus new_status = 2;
+  string updated_by = 3; // system or admin
+}
+message ReservationStatusUpdateAck { bool ok = 1; string msg = 2; }
+
+service CartReserve { rpc CartReserve(CartReservationRequest) returns (CartReservationResponse); }
+service CartFetch {  rpc Log(ReservationLogRq) returns (ReservationLogAck); }
+service CartUpdate {  rpc UpdateStatus(ReservationStatusUpdateRq) returns (ReservationStatusUpdateAck); }
+
+service EventCreate { rpc CreateEvent(EventCreateRq) returns (EventCreateAck); }
+service EventUpdate { rpc UpdateEvent(EventUpdateRq) returns (EventUpdateAck); }
+service EventRemove { rpc RemoveEvent(EventRemoveRq) returns (EventRemoveAck);}
+service EventFetch { rpc GetMyEvents(MyEventsRq) returns (MyEventsReply); }
+
+service TicketIssue { rpc IssueTicket(TicketIssueRq) returns (TicketIssueAck); }
+service TicketCancel {  rpc CancelTicket(TicketCancelRq) returns (TicketCancelAck); }
+service TicketDisplay {  rpc QueryTickets(TicketQueryRq) returns (TicketQueryAck); }
+service TicketUpdate {  rpc UpdateTicketStock(TicketStockRq) returns (TicketStockAck); }

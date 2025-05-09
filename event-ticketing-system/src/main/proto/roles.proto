@@ -1,0 +1,36 @@
+syntax = "proto3";
+package org.example.grpc.roles;
+
+enum UserRole {
+  CUSTOMER = 0;
+  ORGANIZER = 1;
+  CLERK = 2;
+  COORDINATOR = 3;
+}
+
+message User {
+  string user_id = 1;
+  string name = 2;
+  UserRole role = 3;
+}
+
+message UserIdRequest {
+  string user_id = 1;
+}
+message UserRoleRequest {
+  UserRole role = 1;
+}
+
+message UserResponse {
+  bool success = 1;
+  string msg = 2;
+}
+message UserListResponse {
+  repeated User users = 1;
+  string msg = 2;
+}
+
+service UserCreate { rpc CreateUser(User) returns (UserResponse); }
+service UserUpdate {  rpc UpdateUser(User) returns (UserResponse); }
+service UserGet { rpc GetUserById(UserIdRequest) returns (User); }
+service UserGetByRole { rpc GetUsersByRole(UserRoleRequest) returns (UserListResponse); }
